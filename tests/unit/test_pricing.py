@@ -114,7 +114,7 @@ def test_quote_as_dict():
     assert data["coupon"] is None
 
 
-# --- STUDENT15 (TDD rouge) ---
+# --- STUDENT15 ---
 
 
 def test_student15_sans_minimum():
@@ -127,8 +127,10 @@ def test_student15_sans_minimum():
 
 
 def test_student15_sur_ligne_sans_volume():
-    q = quote([{"product_id": "mug", "qty": 2}], coupon="STUDENT15")
+    q = quote([{"product_id": "mug", "qty": 2}], coupon="student15")
+    assert q.subtotal == Decimal("25.00")
     assert q.discount == Decimal("3.75")
+    assert q.shipping == Decimal("4.90")
     assert q.total == Decimal("26.15")
 
 
@@ -145,3 +147,11 @@ def test_student15_non_cumulable_avec_remise_volume():
     assert q.discount == Decimal("0.74")  # 15 % sur stickers seulement
     assert q.shipping == Decimal("0.00")
     assert q.total == Decimal("122.91")
+
+
+def test_student15_panier_uniquement_volume():
+    """Panier 100 % volume : STUDENT15 n'accorde aucune remise."""
+    q = quote([{"product_id": "mug", "qty": 10}], coupon="STUDENT15")
+    assert q.subtotal == Decimal("118.75")
+    assert q.discount == Decimal("0.00")
+    assert q.total == Decimal("118.75")
