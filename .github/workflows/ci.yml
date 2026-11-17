@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install ruff
+      - run: ruff check . --output-format=github
+
+  unit:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Tests unitaires et API
+        run: |
+          mkdir -p reports
+          pytest -m "unit or api" -n auto \
+            --cov --cov-report=xml --cov-report=html \
+            --cov-fail-under=85 \
+            --junitxml=reports/junit.xml
+      - name: Résumé de couverture
+        if: always()
+        run: |
+          echo "## Couverture (Python ${{ matrix.python-version }})" >> "$GITHUB_STEP_SUMMARY"
+          coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Publier les rapports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-py${{ matrix.python-version }}
+          path: |
+            reports/
+            htmlcov/
+          if-no-files-found: ignore
+
+  test-container:
+    needs: lint
+    runs-on: ubuntu-latest
+    container: python:3.12-slim
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer les dépendances
+        run: pip install --no-cache-dir -r requirements-dev.txt
+      - name: Tests dans le conteneur
+        run: pytest -m "unit or api" -n auto
+
+  docker:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construire l'image
+        run: docker build -t minishop:ci .
+      - name: Smoke test /health
+        run: |
+          docker run -d --name minishop -p 8000:8000 minishop:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/health; then
+              echo
+              docker stop minishop
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Healthcheck timeout"
+          docker logs minishop
+          docker stop minishop || true
+          exit 1
