@@ -67,3 +67,41 @@ Compromis alerte nuit : défaut (peu de fenêtres, précision z-score intacte). 
 
 ## 5. Indicateurs suivis
 Taux de réussite sur main, durée de la suite, nombre de tests flaky, couverture, MTTR d'une régression.
+
+## 6. Modèle de risque et priorisation (Atelier 6)
+
+**Hypothèses vérifiées** sur `data/git-history.csv` (taux de casse global ≈ 16 %) :
+1. Les gros commits cassent plus (churn Q4 ≈ 21 % vs Q1 ≈ 11 %) — confirmé.
+2. `stock.py` / `pricing.py` sont les zones les plus fragiles (39 % / 36 %) — confirmé.
+3. Les commits hors code (README, CSS) cassent rarement — confirmé.
+
+**Piège de l'exactitude** : 83 % en prédisant toujours « ok » (classe majoritaire). L'AUC et le
+rappel sur « casse » sont les métriques utiles ; la validation est **temporelle** (passé → futur)
+pour éviter de tricher avec l'avenir. Les features historiques sont calculées *avant* chaque ligne
+(pas de fuite).
+
+| Variante | AUC | Rappel casse | Précision casse |
+|---|---|---|---|
+| Gradient boosting (défaut, seuil 0,5) | 0,72 | 7 % | 33 % |
+| `class_weight="balanced"` (LR) | **0,75** | **48 %** | 28 % |
+| Seuil 0,3 (GB) | 0,72 | 24 % | 38 % |
+| `RandomForestClassifier` | 0,72 | 22 % | 41 % |
+| GB + churn, seuil 0,3 | 0,72 | 41 % | 26 % |
+
+**Choix** : LR `class_weight=balanced` (ou seuil bas) — un faux négatif coûte ~1 h de debug vs ~2 min
+de tests en trop pour un faux positif → maximiser le rappel « casse ».
+
+Job CI `risk-prioritize` (PR) : entraîne, prédit sur le diff, lance d'abord les tests ciblés (`-x`),
+puis la suite complète. On **réordonne**, on ne retire jamais de tests.
+
+### Où investir la semaine prochaine
+| Module | Couverture | Mutation | Échecs hist. | Taux casse | Priorité |
+|---|---|---|---|---|---|
+| `stock.py` | ~50 % | — | 2 | 39 % | **HAUTE** |
+| `pricing.py` | 97 % | 87 % | 4 | 36 % | Haute (bug Decimal / remise) |
+| `api.py` | ~85 % | — | 4 | 27 % | Haute |
+| UI `index.html` | ~40 % | — | 5 (flaky) | 16 % | Haute (stabiliser E2E) |
+| `search.py` | ~60 % | — | 0 | 18 % | Moyenne |
+| `style.css` | faible | — | 0 | 2 % | Basse |
+
+Priorité n°1 : **stock.py** (fort taux de casse + couverture moyenne) et stabiliser le parcours E2E flaky.

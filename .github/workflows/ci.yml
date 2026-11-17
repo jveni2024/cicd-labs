@@ -53,6 +53,54 @@ jobs:
             htmlcov/
           if-no-files-found: ignore
 
+  # Atelier 6 — fail-fast : tests ciblés par risque avant la suite complète
+  risk-prioritize:
+    if: github.event_name == 'pull_request'
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Entraîner le modèle de risque
+        run: |
+          mkdir -p reports
+          python scripts/simulate_history.py
+          python ai_tools/risk_model.py train data/git-history.csv
+      - name: Prioriser les tests selon le diff
+        run: |
+          python ai_tools/risk_model.py predict --git-diff "origin/${{ github.base_ref }}"
+          {
+            echo "## Priorisation des tests (risque)"
+            echo
+            echo '```'
+            cat reports/risk.json
+            echo '```'
+            echo
+            echo "Tests ciblés : \`$(cat reports/tests_to_run.txt)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Fail-fast sur les tests à risque
+        run: |
+          TARGETS=$(cat reports/tests_to_run.txt | tr -d '\n')
+          if [ -z "$TARGETS" ]; then
+            echo "Aucun test ciblé — skip fail-fast"
+            exit 0
+          fi
+          set +e
+          pytest -x -m "not e2e and not visual" $TARGETS
+          code=$?
+          set -e
+          # code 5 = aucun test sélectionné (ex. PR CSS pure) → toléré
+          if [ "$code" -eq 5 ]; then exit 0; fi
+          exit "$code"
+      - name: Suite complète (unit + api)
+        run: pytest -m "unit or api" -n auto
+
   test-container:
     needs: lint
     runs-on: ubuntu-latest
