@@ -21,7 +21,23 @@
 ## 3. Règles pour les tests générés par IA
 - Un test généré est **relu** avant fusion (marqueur `@pytest.mark.generated`).
 - Il doit échouer si on casse la règle qu'il prétend vérifier (vérifié par mutation).
-- Pas de secret ni de donnée client dans les prompts.
+- Pas de secret ni de donnée client dans les prompts (clés API hors dépôt).
+- **Responsable** d'un test généré faux : l'auteur de la PR qui l'intègre (pas le modèle).
+- Divergence spec/code : le test suit la **spec**, avec commentaire `# DIVERGENCE SPEC/CODE`.
+- Les `test_limite_*` inventés par le LLM ne restent que s'ils ciblent une règle réelle du code.
+
+### Comparaison Atelier 3 (`specs/pricing.feature`)
+| Variante | Nb tests | Échecs | Couverture branches | Temps |
+|---|---|---|---|---|
+| Offline | 12 | 0 | 90 % | < 1 s |
+| Anthropic (API) | — | — | — | connexion impossible → repli |
+| Prompt + code (relecture guidée) | 28 | 0 | 97 % | relecture manuelle |
+
+### Scores de mutation (`pricing.py`)
+| Suite | Score |
+|---|---|
+| `tests/unit` (Atelier 1) | **87 %** (39/45) |
+| `tests/generated` | **82 %** (37/45) |
 
 ## 4. Gestion des tests instables (flaky)
 - Détection : `ai_tools/test_history.py` (score ≥ 0,6).
