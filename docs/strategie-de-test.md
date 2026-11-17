@@ -105,3 +105,37 @@ puis la suite complète. On **réordonne**, on ne retire jamais de tests.
 | `style.css` | faible | — | 0 | 2 % | Basse |
 
 Priorité n°1 : **stock.py** (fort taux de casse + couverture moyenne) et stabiliser le parcours E2E flaky.
+
+## 7. Régression visuelle (Atelier 7)
+
+Baselines locales : `tests/visual/baselines/{accueil,panier}.png` (Chromium Playwright).
+
+| Changement CSS | Détecté ? | % pixels | SSIM |
+|---|---|---|---|
+| `--accent: #2563eb` (bleu) | oui (pixels) | 1,36 % | **1,0000** |
+| `padding: 12px` → `14px` | oui | 1,98 % | 0,919 |
+| `font-family: Georgia, serif` | oui | 5,12 % | 0,852 |
+| Bouton « Ajouter » `display:none` | timeout fixture (bouton hidden) | — | — |
+
+**Défaut SSIM niveaux de gris** : `_gray()` mélange R/G/B ; un vert et un bleu de luminance
+proche donnent SSIM ≈ 1 alors que le diff pixel les voit. Correction : SSIM **par canal**
+(moyenne des 3) ou ΔE dans l’espace Lab.
+
+**Baselines en CI** : ne pas committer des PNG Windows puis les comparer sous Linux (polices /
+anti-aliasing). Générer dans le job CI (`UPDATE_BASELINES=1`), publier l’artefact, puis
+re-comparer dans le même OS image.
+
+**Contenu dynamique** (ex. horloge) : `page.screenshot(mask=[page.locator("#clock")])`.
+
+**Auto-healing** : `get_by_role("button", name="Calculer le total")` survit à un renommage de
+`data-testid` ; risque si l’outil « répare » un test qui aurait dû échouer (régression réelle
+masquée).
+
+### Grille outils marché (synthèse)
+| Outil | IA | Faux positifs | Maintenance | Coût | Données chez fournisseur |
+|---|---|---|---|---|---|
+| Maison (pixel+SSIM) | non | élevés (AA/polices) | baselines OS | 0 | non |
+| Applitools Eyes | Visual AI layout | bas | revue diffs | $$$ | oui (screenshots) |
+| Percy | diff intelligent | moyens | baselines cloud | $$ | oui |
+| Playwright `toHaveScreenshot` | non | moyens | thresholds | 0 | non |
+| Testim / Mabl | auto-healing locators | — | low-code | $$$ | oui (parcours) |
