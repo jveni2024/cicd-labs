@@ -1,0 +1,100 @@
+name: AI tests & review
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  llm-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Appeler le LLM
+        env:
+          LLM_PROVIDER: anthropic
+          LLM_MODEL: claude-haiku-5-5
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python ai_tools/llm.py
+
+  generate-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Couverture avant génération
+        id: before
+        run: |
+          mkdir -p reports
+          pytest -m "unit or api" -q --cov=minishop.pricing --cov-branch --cov-report=term \
+            | tee reports/cov-before.txt
+          echo "## Couverture avant génération" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 20 reports/cov-before.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Générer des tests (LLM)
+        continue-on-error: true
+        env:
+          LLM_PROVIDER: anthropic
+          LLM_MODEL: claude-haiku-5-5
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python ai_tools/generate_tests.py specs/pricing.feature \
+            --source minishop/pricing.py \
+            --out tests/generated/test_pricing_ci.py
+      - name: Couverture après génération
+        if: always()
+        run: |
+          pytest -m "unit or api or generated" -q --cov=minishop.pricing --cov-branch --cov-report=term \
+            | tee reports/cov-after.txt || true
+          echo "## Couverture après génération" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 20 reports/cov-after.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Publier tests générés
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-tests
+          path: tests/generated/
+          if-no-files-found: ignore
+
+  ai-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Revue IA de la PR
+        env:
+          LLM_PROVIDER: anthropic
+          LLM_MODEL: claude-haiku-5-5
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          python ai_tools/review_pr.py --base origin/${{ github.base_ref }} --out reports/ai-review.md
+      - name: Commenter la PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body-file reports/ai-review.md \
+            --edit-last || gh pr comment ${{ github.event.pull_request.number }} \
+            --body-file reports/ai-review.md

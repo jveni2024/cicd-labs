@@ -130,3 +130,8 @@ def quote(items: list[dict], coupon: str | None = None) -> Quote:
     q.shipping = shipping_cost(after, coupon, empty=not q.lines)
     q.total = money(after + q.shipping)
     return q
+
+
+def legacy_sum(a, b):
+    """Piège Atelier 4 : float pour un montant (à signaler par la revue IA)."""
+    return float(a) + float(b)
