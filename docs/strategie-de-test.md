@@ -42,6 +42,28 @@
 ## 4. Gestion des tests instables (flaky)
 - Détection : `ai_tools/test_history.py` (score ≥ 0,6).
 - Quarantaine : marqueur `flaky`, ticket ouvert, délai de correction 5 jours.
+- Atelier 5 (`data/junit-history`) : flaky = `test_parcours_achat_avec_coupon` (score 0,8) ;
+  ralentissement = `test_recherche_produits` (+0,007 s/run).
+
+### Familles d'échecs (Atelier 5)
+| Famille | Exemple | Classe | Action |
+|---|---|---|---|
+| Timeout UI `order-btn` | `TimeoutError` Playwright | Test fragile | Quarantaine + stabiliser waits |
+| API down | `httpx.ConnectError` | Infrastructure | Relancer / attendre le service |
+| Remise volume | `Decimal 23.27 ≠ 23.28` | Bug applicatif | Corriger le calcul |
+| Postgres down | `Connection refused :5432` | Infrastructure | Service DB dans le job CI |
+
+### Anomalies logs (Atelier 5)
+| Paramètre | Rappel | Précision | Fenêtres signalées |
+|---|---|---|---|
+| défaut (`window 30`, `contamination 0.02`, z=6) | 100 % | 100 % | 2 |
+| `--contamination 0.10` | 100 % | 100 % | 9 |
+| `--window 5` | 100 % | 100 % | 10 |
+| seuil z = 3 | 100 % | 91 % | 2 |
+
+Compromis alerte nuit : défaut (peu de fenêtres, précision z-score intacte). Analyse quotidienne :
+`.github/workflows/daily-anomalies.yml`. Bonus local : `MINISHOP_BUG=slow` + Locust puis
+`log_anomalies.py --window 5` pour vérifier la détection du ralentissement `/cart/*`.
 
 ## 5. Indicateurs suivis
 Taux de réussite sur main, durée de la suite, nombre de tests flaky, couverture, MTTR d'une régression.
