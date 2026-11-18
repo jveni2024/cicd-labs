@@ -139,3 +139,14 @@ masquée).
 | Percy | diff intelligent | moyens | baselines cloud | $$ | oui |
 | Playwright `toHaveScreenshot` | non | moyens | thresholds | 0 | non |
 | Testim / Mabl | auto-healing locators | — | low-code | $$$ | oui (parcours) |
+
+## 8. E2E UI (Atelier 8)
+
+Parcours Playwright (`tests/e2e/`) via Page Object `ShopPage` : achat + WELCOME10 → 27.40,
+coupon invalide (`role=alert`), bouton Commander désactivé si panier vide. Workflow
+`.github/workflows/e2e.yml` : matrice chromium/firefox, traces/vidéo en cas d’échec.
+
+**Comparatif Selenium vs Playwright** : Selenium exige `WebDriverWait` explicites et n’a pas
+de traces/vidéo natives ni de `expect` web-first ; Playwright localise par rôle/`data-testid`
+et produit des artefacts de debug. Cypress (JS) non retenu ici — même idée que Playwright côté
+attentes auto.
