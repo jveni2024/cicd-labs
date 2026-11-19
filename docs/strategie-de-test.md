@@ -189,6 +189,6 @@ SBOM CycloneDX produit en CI (Trivy). Workflow : `.github/workflows/security.yml
 |---|---|---|---|---|
 | Bandit HIGH | **bloque** | **bloque** | — | code dangereux évident |
 | pip-audit | **bloque** | **bloque** | — | CVE connues avec correctif |
-| Trivy HIGH/CRITICAL | **bloque** | **bloque** | — | image livrable |
+| Trivy HIGH/CRITICAL (fixés) | **bloque** | **bloque** | — | ignore-unfixed : CVE OS sans patch |
 | ZAP baseline | rapport | rapport | — | bruit possible ; FAIL sur nos règles |
 | ZAP API complet | — | — | **oui** | long ; scan profond |
