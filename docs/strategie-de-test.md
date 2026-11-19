@@ -160,3 +160,20 @@ Trois niveaux : pytest `TestClient` (≥ 18 tests dont codes d’erreur), contra
 Contrat **fournisseur** = on garantit notre OpenAPI ; **consommateur** (Pact) = le client
 fixe les attentes. Schemathesis = génération de cas depuis la spec (sans LLM) — constat local :
 échecs ST103 (status non documentés), ST202 (payload schema-valid rejeté), ST108 (réponse hors schéma).
+
+## 10. Performance (Atelier 10)
+
+SLO Locust : p95 &lt; 300 ms, erreurs &lt; 1 % (`tests/perf/locustfile.py`).
+
+| Run | Users | p95 | Erreurs | Exit |
+|---|---|---|---|---|
+| Baseline | 50 / 30 s | ~5 ms | 0 % | 0 |
+| `MINISHOP_BUG=slow` | 20 / 15 s | **4200 ms** | 0 % | **1** (SLO) |
+
+Point de rupture : MiniShop léger tient 50 VU sans décrocher ; la rupture est **artificielle** via
+`slow` (sommeil 0,3–0,8 s sur `/cart/*`) — le p95 agrégé dépasse largement 300 ms et fait
+échouer le job. Workflow nocturne : `.github/workflows/perf.yml` (pas sur chaque PR : trop long).
+
+JMeter : `minishop.jmx` + CSV `products.csv` (`GET /products/${productId}`). Docker / Grafana
+non dispo sur ce poste → à lancer quand Docker Desktop est installé
+(`monitoring/docker-compose.yml`, PromQL p95 sur `minishop_http_request_duration_seconds_bucket`).
