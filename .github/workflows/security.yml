@@ -58,19 +58,13 @@ jobs:
       - name: Build image
         run: docker build -t minishop:ci .
       - name: Trivy HIGH/CRITICAL
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: minishop:ci
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          format: table
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 1 minishop:ci
       - name: SBOM CycloneDX
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: minishop:ci
-          format: cyclonedx
-          output: sbom.cdx.json
-          exit-code: "0"
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD":/out \
+            aquasec/trivy:latest image --format cyclonedx --output /out/sbom.cdx.json minishop:ci
       - uses: actions/upload-artifact@v4
         if: always()
         with:
