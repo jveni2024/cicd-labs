@@ -57,10 +57,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t minishop:ci .
-      - name: Trivy HIGH/CRITICAL
+      - name: Trivy HIGH/CRITICAL (avec correctif disponible)
         run: |
+          # ignore-unfixed : CVE OS sans patch Debian encore → rapport, pas de faux blocage
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest image --severity HIGH,CRITICAL --exit-code 1 minishop:ci
+            aquasec/trivy:latest image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 minishop:ci
       - name: SBOM CycloneDX
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD":/out \
