@@ -1,0 +1,43 @@
+name: Performance
+
+on:
+  schedule:
+    # Nuit : 02:00 UTC — pas sur chaque PR (trop long / bruyant)
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      users:
+        description: "Utilisateurs Locust simultanés"
+        required: false
+        default: "50"
+
+permissions:
+  contents: read
+
+jobs:
+  locust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Démarrer MiniShop
+        run: |
+          uvicorn minishop.api:app --host 127.0.0.1 --port 8000 &
+          timeout 30 bash -c 'until curl -sf localhost:8000/health; do sleep 1; done'
+      - name: Locust headless (SLO p95 < 300 ms, erreurs < 1 %)
+        run: |
+          mkdir -p reports
+          locust -f tests/perf/locustfile.py --host http://127.0.0.1:8000 \
+            --headless -u ${{ github.event.inputs.users || 50 }} -r 10 -t 1m \
+            --csv reports/perf --html reports/perf.html
+      - name: Publier rapports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-locust
+          path: reports/
+          if-no-files-found: ignore

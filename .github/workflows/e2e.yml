@@ -1,0 +1,45 @@
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Installer le navigateur Playwright
+        run: python -m playwright install --with-deps ${{ matrix.browser }}
+      - name: Démarrer MiniShop
+        run: |
+          uvicorn minishop.api:app --host 127.0.0.1 --port 8000 &
+          timeout 30 bash -c 'until curl -sf localhost:8000/health; do sleep 1; done'
+      - name: Tests E2E Playwright
+        run: |
+          pytest -m e2e --ignore=tests/e2e/test_selenium_accueil.py \
+            --browser ${{ matrix.browser }} \
+            --tracing retain-on-failure \
+            --video retain-on-failure \
+            --output test-results
+      - name: Artefacts (échecs)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ matrix.browser }}
+          path: test-results/
+          if-no-files-found: ignore

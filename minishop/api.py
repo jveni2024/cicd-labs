@@ -54,10 +54,23 @@ class Cart(BaseModel):
 
 
 @app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """En-têtes de durcissement (Atelier 11 / ZAP)."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+    )
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+@app.middleware("http")
 async def observe(request: Request, call_next):
     start = time.perf_counter()
     if os.getenv("MINISHOP_BUG") == "slow" and request.url.path.startswith("/cart"):
-        time.sleep(random.uniform(0.3, 0.8))
+        time.sleep(random.uniform(0.3, 0.8))  # nosec B311 — latence démo, pas de crypto
     response = await call_next(request)
     elapsed = time.perf_counter() - start
     path = request.scope.get("route").path if request.scope.get("route") else request.url.path

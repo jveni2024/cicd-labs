@@ -1,0 +1,56 @@
+# Équivalent GitLab CI de .github/workflows/ci.yml (bonus Atelier 2)
+# Identique : stages séquentiels, matrice Python, artefacts JUnit/couverture
+# Diffère : YAML GitLab (script/image), runners partagés, syntaxe parallel:matrix
+
+stages:
+  - lint
+  - test
+  - docker
+
+lint:
+  stage: lint
+  image: python:3.12-slim
+  script:
+    - pip install ruff
+    - ruff check . --output-format=gitlab
+
+unit:
+  stage: test
+  image: python:${PYTHON_VERSION}-slim
+  parallel:
+    matrix:
+      - PYTHON_VERSION: ["3.11", "3.12", "3.13"]
+  before_script:
+    - pip install -r requirements-dev.txt
+  script:
+    - mkdir -p reports
+    - pytest -m "unit or api" -n auto
+      --cov --cov-report=xml --cov-report=html
+      --cov-fail-under=85
+      --junitxml=reports/junit.xml
+  artifacts:
+    when: always
+    paths:
+      - reports/
+      - htmlcov/
+    reports:
+      junit: reports/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+
+docker:
+  stage: docker
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - docker build -t minishop:ci .
+    - docker run -d --name minishop -p 8000:8000 minishop:ci
+    - |
+      for i in $(seq 1 30); do
+        if wget -qO- http://127.0.0.1:8000/health; then exit 0; fi
+        sleep 1
+      done
+      docker logs minishop
+      exit 1

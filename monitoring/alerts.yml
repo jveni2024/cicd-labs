@@ -22,6 +22,15 @@ groups:
         annotations:
           summary: "Aucun run de tests depuis 24 h sur {{ $labels.branch }}"
 
+      # Atelier 12 — plus de 2 runs consécutifs en échec (proxy : échecs > 0 pendant 2× for)
+      - alert: RunsConsecutifsEnEchec
+        expr: ci_tests_failed{branch="main"} > 0
+        for: 20s
+        labels: { severity: critical }
+        annotations:
+          summary: "Runs consécutifs en échec sur main ({{ $value }} tests failed)"
+          description: "Au moins un test échoue de façon soutenue ; vérifier la pipeline et les derniers commits."
+
   - name: application
     rules:
       - alert: LatenceP95Elevee
