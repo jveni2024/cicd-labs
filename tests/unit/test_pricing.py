@@ -1,7 +1,11 @@
 """Tests unitaires des règles de prix — Atelier 1."""
 
+from __future__ import annotations
+
+import json
 from decimal import Decimal
 
+import allure
 import pytest
 
 from minishop.pricing import coupon_discount, line_total, money, quote, shipping_cost
@@ -15,6 +19,7 @@ def test_money_arrondi_commercial():
 
 
 def test_line_total_sans_remise():
+    """Ligne simple : prix unitaire × quantité sans remise volume."""
     assert line_total(Decimal("12.50"), 2) == Decimal("25.00")
 
 
@@ -39,6 +44,7 @@ def test_remise_volume_seuil(qty, expected):
 
 @pytest.mark.parametrize("qty", [0, -1, 100, "2", True])
 def test_quantite_invalide(qty):
+    """Quantité hors plage 1–99 ou non entière → ValueError."""
     with pytest.raises(ValueError):
         line_total(Decimal("10"), qty)
 
@@ -57,10 +63,12 @@ def test_quantite_invalide(qty):
     ],
 )
 def test_coupon_discount_seuils(subtotal, coupon, expected):
+    """Seuils et cas limites des coupons WELCOME10 / FIXED5 / FREESHIP."""
     assert coupon_discount(subtotal, coupon) == expected
 
 
 def test_coupon_inconnu():
+    """Coupon inconnu → ValueError explicite."""
     with pytest.raises(ValueError, match="Coupon inconnu"):
         coupon_discount(Decimal("50"), "NOEL2026")
 
@@ -76,11 +84,18 @@ def test_coupon_inconnu():
     ],
 )
 def test_shipping_cost(amount, coupon, empty, expected):
+    """Livraison 4,90 €, offerte dès 50 € ou avec FREESHIP ; 0 si panier vide."""
     assert shipping_cost(amount, coupon, empty) == expected
 
 
+@allure.feature("Panier")
+@allure.story("Coupons")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_quote_welcome10_et_livraison():
-    q = quote([{"product_id": "mug", "qty": 2}], coupon="WELCOME10")
+    """2 mugs + WELCOME10 → total 27.40 € (sous-total 25, remise 2.50, livraison 4.90)."""
+    with allure.step("Calculer le devis"):
+        q = quote([{"product_id": "mug", "qty": 2}], coupon="WELCOME10")
+    allure.attach(json.dumps(q.as_dict()), "devis", allure.attachment_type.JSON)
     assert q.subtotal == Decimal("25.00")
     assert q.discount == Decimal("2.50")
     assert q.shipping == Decimal("4.90")
@@ -95,18 +110,26 @@ def test_quote_livraison_offerte_apres_remise():
     assert q.total == Decimal("56.50")
 
 
+@allure.feature("Panier")
+@allure.story("Livraison")
+@allure.severity(allure.severity_level.NORMAL)
 def test_quote_freeship():
-    q = quote([{"product_id": "sticker", "qty": 1}], coupon="FREESHIP")
+    """Coupon FREESHIP annule les frais de livraison."""
+    with allure.step("Appliquer FREESHIP sur un petit panier"):
+        q = quote([{"product_id": "sticker", "qty": 1}], coupon="FREESHIP")
+    allure.attach(json.dumps(q.as_dict()), "devis", allure.attachment_type.JSON)
     assert q.shipping == Decimal("0.00")
     assert q.total == Decimal("2.45")
 
 
 def test_quote_produit_inconnu():
+    """Produit hors catalogue → KeyError."""
     with pytest.raises(KeyError, match="Produit inconnu"):
         quote([{"product_id": "licorne", "qty": 1}])
 
 
 def test_quote_as_dict():
+    """Sérialisation du devis : montants en chaînes et lignes présentes."""
     q = quote([{"product_id": "mug", "qty": 1}])
     data = q.as_dict()
     assert data["subtotal"] == "12.50"
@@ -117,9 +140,14 @@ def test_quote_as_dict():
 # --- STUDENT15 ---
 
 
+@allure.feature("Panier")
+@allure.story("Coupons")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_student15_sans_minimum():
     """STUDENT15 : -15 % sans seuil minimum."""
-    q = quote([{"product_id": "sticker", "qty": 1}], coupon="STUDENT15")
+    with allure.step("Appliquer STUDENT15 sur 1 sticker"):
+        q = quote([{"product_id": "sticker", "qty": 1}], coupon="STUDENT15")
+    allure.attach(json.dumps(q.as_dict()), "devis", allure.attachment_type.JSON)
     assert q.subtotal == Decimal("2.45")
     assert q.discount == Decimal("0.37")
     assert q.shipping == Decimal("4.90")
@@ -127,6 +155,7 @@ def test_student15_sans_minimum():
 
 
 def test_student15_sur_ligne_sans_volume():
+    """STUDENT15 s'applique sur une ligne sans remise volume (casse insensible)."""
     q = quote([{"product_id": "mug", "qty": 2}], coupon="student15")
     assert q.subtotal == Decimal("25.00")
     assert q.discount == Decimal("3.75")

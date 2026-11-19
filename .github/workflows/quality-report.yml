@@ -1,0 +1,113 @@
+# Atelier 12 — rapports Allure + catalogue MkDocs → GitHub Pages
+# Callers: push main / workflow_dispatch. Consumes pytest + gen_test_docs + mkdocs + push_metrics.
+name: Quality report
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-quality
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Dépendances
+        run: pip install -r requirements-dev.txt
+
+      - name: Restaurer l'historique Allure (run précédent)
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: quality-report.yml
+          name: allure-history
+          path: allure-results/history
+          if_no_artifact_found: warn
+          workflow_conclusion: success
+        continue-on-error: true
+
+      - name: Tests + Allure + JUnit
+        run: |
+          mkdir -p reports allure-results
+          pytest -m "not e2e and not visual" \
+            --alluredir=allure-results \
+            --junitxml=reports/junit.xml
+
+      - name: Installer Allure CLI
+        run: |
+          curl -fsSL https://github.com/allure-framework/allure2/releases/download/2.32.0/allure-2.32.0.tgz \
+            | sudo tar -xz -C /opt
+          sudo ln -sf /opt/allure-2.32.0/bin/allure /usr/local/bin/allure
+          allure --version
+
+      - name: Générer le rapport Allure
+        run: allure generate allure-results -o allure-report --clean
+
+      - name: Catalogue des tests
+        run: python ai_tools/gen_test_docs.py --junit reports/junit.xml --out docs/tests/catalogue.md
+
+      - name: MkDocs build
+        run: |
+          mkdocs build --site-dir site
+          mkdir -p site/allure
+          cp -r allure-report/. site/allure/
+
+      - name: Pousser les métriques Prometheus
+        env:
+          PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }}
+        run: |
+          if [ -z "$PUSHGATEWAY_URL" ]; then
+            echo "Secret PUSHGATEWAY_URL absent — skip métriques"
+            exit 0
+          fi
+          python ai_tools/push_metrics.py reports/junit.xml \
+            --gateway "$PUSHGATEWAY_URL" \
+            --branch "${{ github.ref_name }}"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Sauvegarder l'historique Allure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-history
+          path: allure-report/history
+          if-no-files-found: ignore
+
+      - name: Artefacts locaux
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-reports
+          path: |
+            reports/
+            allure-report/
+            docs/tests/catalogue.md
+          if-no-files-found: ignore
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

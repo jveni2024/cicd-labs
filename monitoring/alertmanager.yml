@@ -1,6 +1,12 @@
 route:
   receiver: journal
   group_wait: 5s
+  routes:
+    # Atelier 12 — échecs consécutifs / critiques vers le même webhook démo (Slack/Teams en prod)
+    - match:
+        severity: critical
+      receiver: critical
+      continue: true
 receivers:
   - name: journal
     # Récepteur de démonstration : lancez `python scripts/alert_receiver.py` sur votre poste pour voir
@@ -9,3 +15,8 @@ receivers:
     webhook_configs:
       - url: http://host.docker.internal:5001/alert
         send_resolved: true
+  - name: critical
+    webhook_configs:
+      - url: http://host.docker.internal:5001/alert
+        send_resolved: true
+

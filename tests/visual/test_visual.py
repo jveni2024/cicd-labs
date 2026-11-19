@@ -48,11 +48,14 @@ def shop(page: Page, app_url):
 
 
 def test_accueil(shop: Page):
+    """Régression visuelle pleine page de l'accueil vs baseline."""
     check(shop, "accueil", full_page=True)
 
 
 def test_panier_avec_total(shop: Page):
+    """Régression visuelle du panneau panier après devis mug + tshirt."""
     shop.get_by_test_id("add-mug").click()
+
     shop.get_by_test_id("add-tshirt").click()
     shop.get_by_test_id("quote-btn").click()
     shop.get_by_test_id("summary").wait_for()

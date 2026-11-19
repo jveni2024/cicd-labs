@@ -30,7 +30,9 @@ def driver():
 
 
 def test_selenium_accueil_et_ajout_panier(driver, app_url):
+    """Selenium : titre MiniShop, 5 produits, ajout mug active Commander."""
     wait = WebDriverWait(driver, 10)
+
     driver.get(os.getenv("BASE_URL", app_url))
     wait.until(EC.title_contains("MiniShop"))
     assert "MiniShop" in driver.title

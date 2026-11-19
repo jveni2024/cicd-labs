@@ -8,8 +8,8 @@
 | Calcul des prix (`pricing.py`) | Mauvais montant facturé | Moyenne | Élevé | Unitaire + génération IA |
 | API commandes | Commande perdue | Faible | Élevé | API + contrat |
 | Interface | Parcours bloqué | Moyenne | Moyen | E2E + visuel |
-| Performance | Abandon de panier | … | … | Charge (Locust/JMeter) |
-| Sécurité | Fuite / injection | … | … | SAST, SCA, DAST (ZAP) |
+| Performance | Abandon de panier | Moyenne | Élevé | Charge (Locust/JMeter) |
+| Sécurité | Fuite / injection | Faible | Élevé | SAST, SCA, DAST (ZAP) |
 
 ## 2. Pyramide et quality gates
 | Étape pipeline | Tests | Seuil bloquant |
@@ -192,3 +192,25 @@ SBOM CycloneDX produit en CI (Trivy). Workflow : `.github/workflows/security.yml
 | Trivy HIGH/CRITICAL (fixés) | **bloque** | **bloque** | — | ignore-unfixed : CVE OS sans patch |
 | ZAP baseline | rapport | rapport | — | bruit possible ; FAIL sur nos règles |
 | ZAP API complet | — | — | **oui** | long ; scan profond |
+
+Politique formalisée : [ADR 0002](adr/0002-politique-blocage-securite.md).
+
+## 12. Reporting, doc vivante et monitoring (Atelier 12)
+
+| Livrable | Où | Quand |
+|---|---|---|
+| Rapport Allure (features/stories, steps, JSON) | artefact + Pages `/allure/` | chaque push `main` |
+| Catalogue tests (docstrings + statut JUnit) | `docs/tests/catalogue.md` | généré en CI |
+| Stratégie + ADR | `docs/` (MkDocs) | versionné avec le code |
+| Métriques CI → Prometheus | `ai_tools/push_metrics.py` | si secret `PUSHGATEWAY_URL` |
+| Alertes | `monitoring/alerts.yml` | Grafana / Alertmanager |
+
+**Indicateurs suivis** : taux de réussite sur main, durée de suite, tests flaky, couverture,
+MTTR d’une régression, panneau Grafana « Tests en échec (24 h) » + table des tests les plus lents.
+
+**Alerte personnalisée** : `RunsConsecutifsEnEchec` — `ci_tests_failed{branch="main"} > 0` pendant
+20 s (proxy « ≥ 2 runs » via `for` + rejeu historique). Route webhook démo :
+`monitoring/alertmanager.yml` → `scripts/alert_receiver.py`.
+
+Workflow : `.github/workflows/quality-report.yml` (Allure + historique, catalogue, `mkdocs build`,
+GitHub Pages, push métriques optionnel).
