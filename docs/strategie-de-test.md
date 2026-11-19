@@ -150,3 +150,13 @@ coupon invalide (`role=alert`), bouton Commander désactivé si panier vide. Wor
 de traces/vidéo natives ni de `expect` web-first ; Playwright localise par rôle/`data-testid`
 et produit des artefacts de debug. Cypress (JS) non retenu ici — même idée que Playwright côté
 attentes auto.
+
+## 9. Tests d’API (Atelier 9)
+
+Trois niveaux : pytest `TestClient` (≥ 18 tests dont codes d’erreur), contrat OpenAPI
+(`test_openapi_contrat_routes_publiques`), collection Postman + Newman + Schemathesis
+(`.github/workflows/api-contract.yml`).
+
+Contrat **fournisseur** = on garantit notre OpenAPI ; **consommateur** (Pact) = le client
+fixe les attentes. Schemathesis = génération de cas depuis la spec (sans LLM) — constat local :
+échecs ST103 (status non documentés), ST202 (payload schema-valid rejeté), ST108 (réponse hors schéma).

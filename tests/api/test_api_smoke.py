@@ -76,3 +76,66 @@ def test_create_order_panier_vide(client):
 def test_get_order_inconnu(client):
     r = client.get("/orders/does-not-exist")
     assert r.status_code == 404
+
+
+def test_cart_quote_welcome10_total(client):
+    r = client.post(
+        "/cart/quote",
+        json={"items": [{"product_id": "mug", "qty": 2}], "coupon": "WELCOME10"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["subtotal"] == "25.00"
+    assert body["discount"] == "2.50"
+    assert body["shipping"] == "4.90"
+    assert body["total"] == "27.40"
+
+
+@pytest.mark.parametrize("qty", [0, 100])
+def test_cart_quote_quantite_invalide(client, qty):
+    r = client.post("/cart/quote", json={"items": [{"product_id": "mug", "qty": qty}]})
+    assert r.status_code == 422
+
+
+def test_cart_quote_corps_invalide(client):
+    r = client.post("/cart/quote", json={"items": [{"product_id": "mug"}]})
+    assert r.status_code == 422
+
+
+def test_create_order_matches_quote(client):
+    payload = {"items": [{"product_id": "mug", "qty": 2}], "coupon": "WELCOME10"}
+    quote = client.post("/cart/quote", json=payload).json()
+    created = client.post("/orders", json=payload)
+    assert created.status_code == 201
+    order = created.json()
+    assert order["total"] == quote["total"]
+    fetched = client.get(f"/orders/{order['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json() == order
+
+
+def test_openapi_contrat_routes_publiques(client):
+    """Échoue si une route publique disparaît ou si un type de champ change."""
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+    required = {
+        "/health": {"get"},
+        "/products": {"get"},
+        "/products/{product_id}": {"get"},
+        "/cart/quote": {"post"},
+        "/orders": {"post"},
+        "/orders/{order_id}": {"get"},
+    }
+    for path, methods in required.items():
+        assert path in paths, f"Route manquante dans OpenAPI : {path}"
+        for method in methods:
+            assert method in paths[path], f"Méthode {method.upper()} absente pour {path}"
+
+    health = client.get("/health").json()
+    assert isinstance(health["status"], str)
+    assert isinstance(health["version"], str)
+
+    product = client.get("/products/mug").json()
+    for key, typ in [("id", str), ("name", str), ("price", str), ("stock", int)]:
+        assert key in product
+        assert isinstance(product[key], typ), f"{key} devrait être {typ.__name__}"

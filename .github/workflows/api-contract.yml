@@ -1,0 +1,80 @@
+name: API contract
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  newman:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: pip install -r requirements-dev.txt
+      - name: Démarrer MiniShop
+        run: |
+          uvicorn minishop.api:app --host 127.0.0.1 --port 8000 &
+          timeout 30 bash -c 'until curl -sf localhost:8000/health; do sleep 1; done'
+      - name: Newman (collection Postman)
+        run: |
+          mkdir -p reports
+          npx --yes newman run tests/api/minishop.postman_collection.json \
+            --env-var baseUrl=http://127.0.0.1:8000 \
+            -r cli,junit --reporter-junit-export reports/newman.xml
+      - name: Publier rapport Newman
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-junit
+          path: reports/newman.xml
+          if-no-files-found: ignore
+
+  schemathesis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Démarrer MiniShop
+        run: |
+          uvicorn minishop.api:app --host 127.0.0.1 --port 8000 &
+          timeout 30 bash -c 'until curl -sf localhost:8000/health; do sleep 1; done'
+      - name: Schemathesis (génération depuis OpenAPI)
+        run: |
+          mkdir -p reports
+          set +e
+          schemathesis run http://127.0.0.1:8000/openapi.json --checks all \
+            --max-examples 30 \
+            --report junit --report-junit-path reports/schemathesis.xml
+          code=$?
+          set -e
+          {
+            echo "## Schemathesis"
+            echo
+            echo "Exit code: \`$code\` — échecs générés analysés (job non bloquant)."
+            echo
+            echo "Typiquement : status codes non documentés (ST103), rejet de données valides (ST202),"
+            echo "ou réponse hors schéma (ST108). Lien Module 2 : génération depuis la spec, sans LLM."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+      - name: Publier rapport Schemathesis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schemathesis-junit
+          path: reports/schemathesis.xml
+          if-no-files-found: ignore
