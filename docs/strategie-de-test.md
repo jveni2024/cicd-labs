@@ -177,3 +177,18 @@ Point de rupture : MiniShop léger tient 50 VU sans décrocher ; la rupture est 
 JMeter : `minishop.jmx` + CSV `products.csv` (`GET /products/${productId}`). Docker / Grafana
 non dispo sur ce poste → à lancer quand Docker Desktop est installé
 (`monitoring/docker-compose.yml`, PromQL p95 sur `minishop_http_request_duration_seconds_bucket`).
+
+## 11. Sécurité (Atelier 11)
+
+Démo SAST : route `/debug/eval` → Bandit **B307 Medium** + Ruff **S307** (retirée ensuite).
+En-têtes ajoutés : `X-Content-Type-Options`, `CSP`, `X-Frame-Options`, `Referrer-Policy`.
+Règles ZAP 10021/10038 passées en **FAIL**. Dependabot déjà configuré (`.github/dependabot.yml`).
+SBOM CycloneDX produit en CI (Trivy). Workflow : `.github/workflows/security.yml`.
+
+| Contrôle | Sur PR | Sur main | Nocturne | Justification |
+|---|---|---|---|---|
+| Bandit HIGH | **bloque** | **bloque** | — | code dangereux évident |
+| pip-audit | **bloque** | **bloque** | — | CVE connues avec correctif |
+| Trivy HIGH/CRITICAL | **bloque** | **bloque** | — | image livrable |
+| ZAP baseline | rapport | rapport | — | bruit possible ; FAIL sur nos règles |
+| ZAP API complet | — | — | **oui** | long ; scan profond |
